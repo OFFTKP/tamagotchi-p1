@@ -1,0 +1,501 @@
+XMACRO(PSET, "1110'010x'xxxx",
+	NPCB = opcode_ & 0b1'0000;
+    NPCP = opcode_ & 0b1111;
+)
+XMACRO(JP, "0000'xxxx'xxxx",
+    PCB = NPCB;
+    PCP = NPCP;
+    PCS = opcode_ & 0xFF;
+)
+XMACRO(JP_f, "0x1x'xxxx'xxxx",
+	bool is_carry_jump = opcode_ & 0b0100'0000'0000;
+	bool is_not_jump = opcode_ & 0b0001'0000'0000;
+    bool should_jump = is_carry_jump ? 
+        (is_not_jump ? !check_c() : check_c()) :
+        (is_not_jump ? !check_z() : check_z());
+    if (should_jump) {
+        _JP();
+    }
+)
+XMACRO(JPBA, "1111'1110'1000",
+	PCB = NPCB;
+    PCP = NPCP;
+    PCS = B.Get() << 4 | A.Get();
+)
+XMACRO(CALL, "010x'xxxx'xxxx",
+    // Check between CALL and CALZ which sets page to 0
+    write_ram(--SP, PCP);
+    write_ram(--SP, PCS >> 4);
+    write_ram(--SP, 1 + PCS & 0xF);
+    PCP = NPCP.Get() * ((0b0001'0000'0000) & opcode_) ? 0 : 1;
+    PCS = opcode_ & 0xFF;
+)
+XMACRO(RET, "1111'1101'111x",
+	PCS = (read_ram(SP + 1).Get() << 4) | read_ram(SP).Get();
+    PCP = read_ram(SP + 2);
+    SP += 3;
+    if (opcode_ & 1) {
+        PCS++;
+    }
+)
+XMACRO(RETD, "0001'xxxx'xxxx",
+	PCS = (read_ram(SP + 1).Get() << 4) | read_ram(SP).Get();
+    PCP = read_ram(SP + 2);
+    SP += 3;
+    write_ram(IX, opcode_ & 0xF);
+    write_ram(IX + 1, (opcode_ >> 4) & 0xF);
+    IX += 2;
+)
+XMACRO(NOP, "1111'1111'1x11",
+	// TODO: differentiation of 5/7 cycle NOPs
+)
+XMACRO(HALT, "1111'1111'1000",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::HALT) << std::endl;
+)
+XMACRO(INC, "1110'111x'0000",
+	if (opcode_ & 0b0000'0001'0000) {
+        IY++;
+    } else {
+        IX++;
+    }
+)
+XMACRO(LD_Xx, "1011'xxxx'xxxx",
+	IX &= 0xF00;
+    IX |= opcode_ & 0xFF;
+)
+XMACRO(LD_Yy, "1000'xxxx'xxxx",
+	IY &= 0xF00;
+    IY |= opcode_ & 0xFF;
+)
+XMACRO(LD_Xr, "1110'1000'xxxx",
+    auto id = (opcode_ & 0b1100) >> 2;
+    auto data = read_rq(opcode_ & 0b11).Get();
+    switch (id) {
+        case 0b00: {
+            IX &= 0xFF;
+            IX |= data << 8;
+            break;
+        }
+        case 0b01: {
+            IX &= 0xF0F;
+            IX |= data << 4;
+            break;
+        }
+        case 0b10: {
+            IX &= 0xFF0;
+            IX |= data;
+            break;
+        }
+    }
+)
+XMACRO(LD_Yr, "1110'1001'xxxx",
+    auto id = (opcode_ & 0b1100) >> 2;
+    auto data = read_rq(opcode_ & 0b11).Get();
+    switch (id) {
+        case 0b00: {
+            IY &= 0xFF;
+            IY |= data << 8;
+            break;
+        }
+        case 0b01: {
+            IY &= 0xF0F;
+            IY |= data << 4;
+            break;
+        }
+        case 0b10: {
+            IY &= 0xFF0;
+            IY |= data;
+            break;
+        }
+    }
+)
+XMACRO(LD_rX, "1110'1010'xxxx",
+	auto id = (opcode_ & 0b1100) >> 2;
+    auto data = read_rq(opcode_ & 0b11).Get();
+    switch (id) {
+        case 0b00: {
+            write_ram(IX >> 8, data);
+            break;
+        }
+        case 0b01: {
+            write_ram((IX >> 4) & 0xF, data);
+            break;
+        }
+        case 0b10: {
+            write_ram(IX & 0xF, data);
+            break;
+        }
+    }
+)
+XMACRO(LD_rY, "1110'1011'xxxx",
+    auto id = (opcode_ & 0b1100) >> 2;
+    auto data = read_rq(opcode_ & 0b11).Get();
+    switch (id) {
+        case 0b00: {
+            write_ram(IY >> 8, data);
+            break;
+        }
+        case 0b01: {
+            write_ram((IY >> 4) & 0xF, data);
+            break;
+        }
+        case 0b10: {
+            write_ram(IY & 0xF, data);
+            break;
+        }
+    }
+)
+XMACRO(ADC_X, "1010'000x'xxxx",
+	bool low = opcode_ & 0b1'0000;
+    uint8_t data = opcode_ & 0xF;
+    if (low) {
+        uint8_t ix = IX & 0xF;
+        ix += data + check_c();
+        set_c(ix > 0xF);
+        set_z(ix & 0xF == 0);
+        IX &= 0xFF0;
+        IX |= ix & 0xF;
+    } else {
+        uint8_t ix = (IX & 0xF0) >> 4;
+        ix += data + check_c();
+        set_c(ix > 0xF);
+        set_z(ix & 0xF == 0);
+        IX &= 0xF0F;
+        IX |= (ix & 0xF) << 4;
+    }
+)
+XMACRO(ADC_Y, "1010'001x'xxxx",
+	bool low = opcode_ & 0b1'0000;
+    uint8_t data = opcode_ & 0xF;
+    if (low) {
+        uint8_t iy = IY & 0xF;
+        iy += data + check_c();
+        set_c(iy > 0xF);
+        set_z(iy & 0xF == 0);
+        IY &= 0xFF0;
+        IY |= iy & 0xF;
+    } else {
+        uint8_t iy = (IY & 0xF0) >> 4;
+        iy += data + check_c();
+        set_c(iy > 0xF);
+        set_z(iy & 0xF == 0);
+        IY &= 0xF0F;
+        IY |= (iy & 0xF) << 4;
+    }
+)
+XMACRO(CP_X, "1010'010x'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::CP_X) << std::endl;
+)
+XMACRO(CP_Y, "1010'011x'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::CP_Y) << std::endl;
+)
+XMACRO(LD_ri, "1110'00xx'xxxx",
+	write_rq((opcode_ >> 4) & 0b11, opcode_ & 0xF);
+)
+XMACRO(LD_rq, "1110'1100'xxxx",
+	write_rq((opcode_ >> 2) & 0b11, read_rq(opcode_ & 0b11));
+)
+XMACRO(LD_AMn, "1111'1010'xxxx",
+	A = read_ram(opcode_ & 0xF);
+)
+XMACRO(LD_BMn, "1111'1011'xxxx",
+	B = read_ram(opcode_ & 0xF);
+)
+XMACRO(LD_MnA, "1111'1000'xxxx",
+    write_ram(opcode_ & 0xF, A);
+)
+XMACRO(LD_MnB, "1111'1001'xxxx",
+    write_ram(opcode_ & 0xF, B);
+)
+XMACRO(LDP, "1110'x110'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::LDP) << std::endl;
+)
+XMACRO(LDPY, "1110'x111'xxxx",
+	bool rq = opcode_ & 0b1000'0000;
+    if (rq) {
+        _LD_rq();
+    } else {
+        write_ram(IY, opcode_ & 0b1111);
+    }
+    ++IY;
+)
+XMACRO(LBPX, "1001'xxxx'xxxx",
+	write_ram(IX, opcode_ & 0xF);
+    write_ram(IX + 1, (opcode_ & 0xF0) >> 4);
+    IX += 2;
+)
+XMACRO(SET, "1111'0100'xxxx",
+	F |= opcode_ & 0xF;
+)
+XMACRO(RST, "1111'0101'xxxx",
+	F &= opcode_ & 0xF;
+)
+XMACRO(SCF, "1111'0100'0001",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SCF) << std::endl;
+)
+XMACRO(RCF, "1111'0101'1110",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RCF) << std::endl;
+)
+XMACRO(SZF, "1111'0100'0010",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SZF) << std::endl;
+)
+XMACRO(RZF, "1111'0101'1101",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RZF) << std::endl;
+)
+XMACRO(SDF, "1111'0100'0100",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SDF) << std::endl;
+)
+XMACRO(RDF, "1111'0101'1011",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RDF) << std::endl;
+)
+XMACRO(EI, "1111'0100'1000",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::EI) << std::endl;
+)
+XMACRO(DI, "1111'0101'0111",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::DI) << std::endl;
+)
+XMACRO(PUSH, "1111'1100'xxxx",
+	bool r = !(opcode_ & 0b1100);
+    SP -= 1;
+    Nibble data = 0;
+    if (r) {
+        data = read_rq(opcode_ & 0b11);
+    } else {
+        auto id = opcode_ & 0b1111;
+        switch (id) {
+            case 0b0100: {
+                data = IX >> 8;
+                break;
+            }
+            case 0b0101: {
+                data = (IX >> 4) & 0xF;
+                break;
+            }
+            case 0b0110: {
+                data = IX & 0xF;
+                break;
+            }
+            case 0b0111: {
+                data = IY >> 8;
+                break;
+            }
+            case 0b1000: {
+                data = (IY >> 4) & 0xF;
+                break;
+            }
+            case 0b1001: {
+                data = IY & 0xF;
+                break;
+            }
+            case 0b1010: {
+                data = F;
+                break;
+            }
+            default: {
+                std::cout << "Bad PUSH instruction: " << serialize(OpcodeType::PUSH) << std::endl;
+            }
+        }
+    }
+    write_ram(SP, data);
+)
+XMACRO(POP, "1111'1101'xxxx",
+	bool r = !(opcode_ & 0b1100);
+    uint8_t data = read_ram(SP).Get();
+    SP += 1;
+    if (r) {
+        write_rq(opcode_ & 0b11, data);
+    } else {
+        auto id = opcode_ & 0b1111;
+        switch (id) {
+            case 0b0100: {
+                IX = (data << 8) | (IX & 0xFF);
+                break;
+            }
+            case 0b0101: {
+                IX = (data << 4) | (IX & 0xF0F);
+                break;
+            }
+            case 0b0110: {
+                IX = (data) | (IX & 0xFF0);
+                break;
+            }
+            case 0b0111: {
+                IY = (data << 8) | (IY & 0xFF);
+                break;
+            }
+            case 0b1000: {
+                IY = (data << 4) | (IY & 0xF0F);
+                break;
+            }
+            case 0b1001: {
+                IY = (data) | (IY & 0xFF0);
+                break;
+            }
+            case 0b1010: {
+                F = data;
+                break;
+            }
+            default: {
+                std::cout << "Bad POP instruction: " << serialize(OpcodeType::POP) << std::endl;
+            }
+        }
+    }
+)
+XMACRO(LD_SP, "1111'111x'0xxx",
+    auto addr = opcode_ & 0b11;
+	bool low = opcode_ & 0b1'0000;
+    bool is_setting_sp = !(opcode_ & 0b100);
+    if (is_setting_sp) {
+        if (low) {
+            SP = (SP & 0xF0) | read_rq(addr).Get();
+        } else {
+            SP = (SP & 0xF) | (read_rq(addr).Get() << 4);
+        }
+    } else {
+        if (low) {
+            write_rq(addr, SP & 0xF);
+        } else {
+            write_rq(addr, (SP >> 4) & 0xF);
+        }
+    }
+)
+XMACRO(ADD_i, "1100'00xx'xxxx",
+	auto addr = (opcode_ >> 4) & 0b11;
+    auto r = read_rq(addr);
+    auto i = opcode_ & 0b1111;
+    auto result = r.Get() + i;
+    set_z(result == 0);
+    set_c(result > 0xFF);
+    write_rq(addr, result);
+)
+XMACRO(ADD_q, "1010'1000'xxxx",
+	auto addr = (opcode_ >> 2) & 0b11;
+    auto r = read_rq(addr);
+    auto q = read_rq(opcode_ & 0b11);
+    auto result = r.Get() + q.Get();
+    set_z(result == 0);
+    set_c(result > 0xFF);
+    write_rq(addr, result);
+)
+XMACRO(ADC_i, "1100'01xx'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::ADC_i) << std::endl;
+)
+XMACRO(ADC_q, "1010'1001'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::ADC_q) << std::endl;
+)
+XMACRO(SUB, "1010'1010'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SUB) << std::endl;
+)
+XMACRO(SBC_i, "1101'01xx'xxxx",
+	auto addr = (opcode_ >> 4) & 0b11;
+    auto r = read_rq(addr);
+    auto i = opcode_ & 0b1111;
+    auto result = r.Get() - i - check_c();
+    set_z(result == 0);
+    set_c(result < 0);
+    write_rq(addr, result);
+)
+XMACRO(SBC_q, "1010'1011'xxxx",
+	auto addr = (opcode_ >> 2) & 0b11;
+    auto r = read_rq(addr);
+    auto q = read_rq(opcode_ & 0b11);
+    auto result = r.Get() - q.Get() - check_c();
+    set_z(result == 0);
+    set_c(result < 0);
+    write_rq(addr, result);
+)
+XMACRO(AND_i, "1100'10xx'xxxx",
+	auto addr = (opcode_ >> 4) & 0b11;
+    auto r = read_rq(addr);
+    auto i = opcode_ & 0b1111;
+    auto result = r.Get() & i;
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(AND_q, "1010'1100'xxxx",
+	auto addr = (opcode_ >> 2) & 0b11;
+    auto r = read_rq(addr);
+    auto q = read_rq(opcode_ & 0b11);
+    auto result = r.Get() & q.Get();
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(OR_i, "1100'11xx'xxxx",
+    auto addr = (opcode_ >> 4) & 0b11;
+	auto r = read_rq(addr);
+    auto i = opcode_ & 0b1111;
+    auto result = r.Get() | i;
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(OR_q, "1010'1101'xxxx",
+    auto addr = (opcode_ >> 2) & 0b11;
+    auto r = read_rq(addr);
+    auto q = read_rq(opcode_ & 0b11);
+    auto result = r.Get() | q.Get();
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(XOR_i, "1101'00xx'xxxx",
+	auto addr = (opcode_ >> 4) & 0b11;
+    auto r = read_rq(addr);
+    auto i = opcode_ & 0b1111;
+    auto result = r.Get() ^ i;
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(XOR_q, "1010'1110'xxxx",
+	auto addr = (opcode_ >> 2) & 0b11;
+    auto r = read_rq(addr);
+    auto q = read_rq(opcode_ & 0b11);
+    auto result = r.Get() ^ q.Get();
+    set_z(result == 0);
+    write_rq(addr, result);
+)
+XMACRO(CP_ri, "1101'11xx'xxxx",
+	int r = read_rq((opcode_ >> 4) & 0b11).Get();
+    int i = opcode_ & 0b1111;
+    auto result = r - i;
+    set_z(result == 0);
+    set_c(result < 0);
+)
+XMACRO(CP_rq, "1111'0000'xxxx",
+	int q = read_rq(opcode_ & 0b11).Get();
+    int r = read_rq((opcode_ >> 2) & 0b11).Get();
+    auto result = r - q;
+    set_z(result == 0);
+    set_c(result < 0);
+)
+XMACRO(FAN_i, "1101'10xx'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::FAN_i) << std::endl;
+)
+XMACRO(FAN_q, "1111'0001'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::FAN_q) << std::endl;
+)
+XMACRO(RLC, "1010'1111'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RLC) << std::endl;
+)
+XMACRO(RRC, "1110'1000'11xx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RRC) << std::endl;
+)
+XMACRO(INC_Mn, "1111'0110'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::INC_Mn) << std::endl;
+)
+XMACRO(DEC_Mn, "1111'0111'xxxx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::DEC_Mn) << std::endl;
+)
+XMACRO(ACP, "1111'0010'10xx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::ACP) << std::endl;
+)
+XMACRO(ACPY, "1111'0010'11xx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::ACPY) << std::endl;
+)
+XMACRO(SCP, "1111'0011'10xx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SCP) << std::endl;
+)
+XMACRO(SCPY, "1111'0011'11xx",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::SCPY) << std::endl;
+)
+XMACRO(NOT, "1101'00xx'1111",
+	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::NOT) << std::endl;
+)
