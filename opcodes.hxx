@@ -6,10 +6,9 @@ enum class OpcodeType {
     #define XMACRO(name, unused, ...) name,
     #include "opcodes.def"
     #undef XMACRO
-    OpcodeTypeSize,
-};
+    };
 
-static std::string serialize(OpcodeType type) {
+[[maybe_unused]] static std::string serialize(OpcodeType type) {
     switch (type) {
         #define XMACRO(name, unused, ...) case OpcodeType::name: return #name;
         #include "opcodes.def"

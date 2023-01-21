@@ -26,8 +26,8 @@ XMACRO(CALL, "010x'xxxx'xxxx",
     // Check between CALL and CALZ which sets page to 0
     write_ram(--SP, PCP);
     write_ram(--SP, PCS >> 4);
-    write_ram(--SP, 1 + PCS & 0xF);
-    PCP = NPCP.Get() * ((0b0001'0000'0000) & opcode_) ? 0 : 1;
+    write_ram(--SP, 1 + (PCS & 0xF));
+    PCP = NPCP.Get() && (((0b0001'0000'0000) & opcode_) ? 0 : 1);
     PCS = opcode_ & 0xFF;
 )
 XMACRO(RET, "1111'1101'111x",
@@ -152,14 +152,14 @@ XMACRO(ADC_X, "1010'000x'xxxx",
         uint8_t ix = IX & 0xF;
         ix += data + check_c();
         set_c(ix > 0xF);
-        set_z(ix & 0xF == 0);
+        set_z((ix & 0xF) == 0);
         IX &= 0xFF0;
         IX |= ix & 0xF;
     } else {
         uint8_t ix = (IX & 0xF0) >> 4;
         ix += data + check_c();
         set_c(ix > 0xF);
-        set_z(ix & 0xF == 0);
+        set_z((ix & 0xF) == 0);
         IX &= 0xF0F;
         IX |= (ix & 0xF) << 4;
     }
@@ -171,14 +171,14 @@ XMACRO(ADC_Y, "1010'001x'xxxx",
         uint8_t iy = IY & 0xF;
         iy += data + check_c();
         set_c(iy > 0xF);
-        set_z(iy & 0xF == 0);
+        set_z((iy & 0xF) == 0);
         IY &= 0xFF0;
         IY |= iy & 0xF;
     } else {
         uint8_t iy = (IY & 0xF0) >> 4;
         iy += data + check_c();
         set_c(iy > 0xF);
-        set_z(iy & 0xF == 0);
+        set_z((iy & 0xF) == 0);
         IY &= 0xF0F;
         IY |= (iy & 0xF) << 4;
     }

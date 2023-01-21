@@ -14,9 +14,9 @@ void CPU::LoadRom(std::string filename) {
     std::streampos length = ifs.tellg();
     ifs.seekg(0, std::ios::beg);
     raw.resize(length);
-    ifs.read((char*)raw.data(), length);
+    ifs.read(reinterpret_cast<char*>(raw.data()), length);
     // Convert bytes to nibbles
-    memory_.resize(length/2 * 3);
+    memory_.resize(length / 2 * 3);
     if (memory_.size() != 6144 * 3) {
         throw std::runtime_error("Invalid ROM size");
     }
@@ -31,66 +31,6 @@ void CPU::LoadRom(std::string filename) {
         log();
         step();
     }
-}
-
-uint16_t CPU::get_ix() {
-    return IX & 0xFFF;
-}
-
-uint16_t CPU::get_iy() {
-    return IY & 0xFFF;
-}
-
-uint8_t CPU::get_x() {
-    return IX & 0xFF;
-}
-
-uint8_t CPU::get_y() {
-    return IY & 0xFF;
-}
-
-Nibble CPU::get_xh() {
-    return (get_x() & 0xF0) >> 4;
-}
-
-Nibble CPU::get_yh() {
-    return (get_y() & 0xF0) >> 4;
-}
-
-Nibble CPU::get_xl() {
-    return get_x() & 0xF;
-}
-
-Nibble CPU::get_yl() {
-    return get_y() & 0xF;
-}
-
-Nibble CPU::get_xp() {
-    return (IX >> 8) & 0xF;
-}
-
-Nibble CPU::get_yp() {
-    return (IY >> 8) & 0xF;
-}
-
-uint8_t CPU::get_sp() {
-    return SP;
-}
-
-Nibble CPU::get_sph() {
-    return (SP & 0xF0) >> 4;
-}
-
-Nibble CPU::get_spl() {
-    return SP & 0xF;
-}
-
-Nibble CPU::get_mx() {
-    return read(get_ix());
-}
-
-Nibble CPU::get_my() {
-    return read(get_iy());
 }
 
 bool CPU::check_c() {
@@ -110,19 +50,19 @@ bool CPU::check_d() {
 }
 
 void CPU::set_c(bool value) {
-    F ^= (-(int)value ^ F.Get()) & (1UL << 0);
+    F ^= (static_cast<int>(value ^ F.Get())) & (1UL << 0);
 }
 
 void CPU::set_z(bool value) {
-    F ^= (-(int)value ^ F.Get()) & (1UL << 1);
+    F ^= (static_cast<int>(value ^ F.Get())) & (1UL << 1);
 }
 
 void CPU::set_d(bool value) {
-    F ^= (-(int)value ^ F.Get()) & (1UL << 2);
+    F ^= (static_cast<int>(value ^ F.Get())) & (1UL << 2);
 }
 
 void CPU::set_i(bool value) {
-    F ^= (-(int)value ^ F.Get()) & (1UL << 3);
+    F ^= (static_cast<int>(value ^ F.Get())) & (1UL << 3);
 }
 
 Nibble CPU::read_rq(uint8_t addr) {
@@ -152,6 +92,7 @@ uint16_t CPU::get_addr() {
     uint16_t addr = PCB ? 0x1000 : 1;
     addr *= static_cast<int>(PCP.Get()) * 0x100;
     addr += PCS;
+    // Each step counts as 3 nibbles
     addr *= 3;
     return addr;
 }
@@ -168,7 +109,7 @@ Nibble CPU::read_ram(uint16_t addr) {
         return read_io(addr);
     } else {
         std::cout << boost::stacktrace::stacktrace() << std::endl;
-        throw std::runtime_error("Tried to access invalid RAM address: " + std::to_string(addr));
+        throw std::runtime_error("Tried to access invalid RAM address: " + std::to_string(static_cast<int>(addr)));
     }
 }
 
@@ -179,7 +120,7 @@ void CPU::write_ram(uint16_t addr, Nibble value) {
         write_io(addr, value);
     } else {
         std::cout << boost::stacktrace::stacktrace() << std::endl;
-        throw std::runtime_error("Tried to access invalid RAM address: " + std::to_string(addr));
+        throw std::runtime_error("Tried to access invalid RAM address: " + std::to_string(static_cast<int>(addr)));
     }
 }
 
@@ -193,16 +134,16 @@ void CPU::write_io(uint16_t addr, Nibble value) {
 }
 
 void CPU::log() {
-    // auto opcode = get_opcode();
-    // std::cout << "Bank: " << static_cast<int>(PCB) << " Page: " << static_cast<int>(PCP.Get()) << " Step: " << static_cast<int>(PCS) << " Addr: ";
-    // std::cout << std::hex << std::setfill('0') << std::setw(3) << get_addr();
-    // std::cout << " " << std::hex << std::setfill('0') << std::setw(3) << opcode << " (" << serialize(decode(opcode)) << "): ";
-    // std::cout << "A: " << std::hex << std::setfill('0') << std::setw(1) << static_cast<int>(A.Get());
-    // std::cout << " B: " << std::hex << std::setfill('0') << std::setw(1) << static_cast<int>(B.Get());
-    // std::cout << " IX: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(IX);
-    // std::cout << " IY: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(IY);
-    // std::cout << " SP: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(SP);
-    // std::cout << std::endl;
+    auto opcode = get_opcode();
+    std::cout << "Bank: " << static_cast<int>(PCB) << " Page: " << static_cast<int>(PCP.Get()) << " Step: " << static_cast<int>(PCS) << " Addr: ";
+    std::cout << std::hex << std::setfill('0') << std::setw(3) << get_addr();
+    std::cout << " " << std::hex << std::setfill('0') << std::setw(3) << opcode << " (" << serialize(decode(opcode)) << "): ";
+    std::cout << "A: " << std::hex << std::setfill('0') << std::setw(1) << static_cast<int>(A.Get());
+    std::cout << " B: " << std::hex << std::setfill('0') << std::setw(1) << static_cast<int>(B.Get());
+    std::cout << " IX: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(IX);
+    std::cout << " IY: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(IY);
+    std::cout << " SP: " << std::hex << std::setfill('0') << std::setw(3) << static_cast<int>(SP);
+    std::cout << std::endl;
 }
 
 void CPU::step() {

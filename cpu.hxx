@@ -12,14 +12,6 @@ class CPU {
 public:
     void LoadRom(std::string filename);
 private:
-    uint16_t get_ix(), get_iy();
-    uint8_t get_x(), get_y();
-    Nibble get_xh(), get_yh();
-    Nibble get_xl(), get_yl();
-    Nibble get_xp(), get_yp();
-    uint8_t get_sp();
-    Nibble get_sph(), get_spl();
-    Nibble get_mx(), get_my(); // TODO: remove
     uint16_t get_opcode();
     uint16_t get_addr();
     bool check_c(), check_z(), check_d(), check_i();
