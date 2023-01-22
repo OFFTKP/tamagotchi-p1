@@ -18,12 +18,6 @@ public:
     Nibble operator~() const {
         return Nibble(~data_);
     }
-    Nibble operator<<(const Nibble& other) const {
-        return Nibble(data_ << other.data_);
-    }
-    Nibble operator>>(const Nibble& other) const {
-        return Nibble(data_ >> other.data_);
-    }
     Nibble operator+(const Nibble& other) const {
         return Nibble(data_ + other.data_);
     }
@@ -40,16 +34,6 @@ public:
     }
     Nibble& operator^=(const Nibble& other) {
         data_ ^= other.data_;
-        return *this;
-    }
-    Nibble& operator<<=(const Nibble& other) {
-        data_ <<= other.data_;
-        data_ &= 0xF;
-        return *this;
-    }
-    Nibble& operator>>=(const Nibble& other) {
-        data_ >>= other.data_;
-        data_ &= 0xF;
         return *this;
     }
     Nibble& operator+=(const Nibble& other) {

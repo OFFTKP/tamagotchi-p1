@@ -13,4 +13,5 @@ add_executable(Tama
     cpu.cxx
     opcode_handlers.cxx
     decode.cxx
+    io.cxx
 )

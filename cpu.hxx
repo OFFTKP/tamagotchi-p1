@@ -6,7 +6,25 @@
 #include <string>
 #include <array>
 
+constexpr static inline uint16_t CpuFrequency = 32768;
+
 class Tama;
+
+enum InterruptType {
+    Clock,
+    Stopwatch,
+    Programmable,
+    Serial,
+    K00K03,
+    K10K13,
+    InterruptTypeSize
+};
+
+struct Interrupt {
+    Nibble factor;
+    Nibble mask;
+    bool triggered;
+};
 
 class CPU {
 public:
@@ -19,17 +37,20 @@ private:
     Nibble read(uint16_t addr);
     Nibble read_ram(uint16_t addr);
     void write_ram(uint16_t addr, Nibble data);
+    Nibble read_vram(uint8_t addr);
+    void write_vram(uint8_t addr, Nibble data);
     Nibble read_io(uint16_t addr);
     void write_io(uint16_t addr, Nibble data);
+    void reset_io();
     Nibble read_rq(uint8_t rq);
     void write_rq(uint8_t rq, Nibble data);
     void log();
     void reset();
 
-    Nibble A, B;
-    Nibble F;
-    uint8_t SP;
-    uint16_t IX, IY;
+    Nibble A { 0 }, B { 0 };
+    Nibble F { 0 };
+    uint8_t SP { 0 };
+    uint16_t IX { 0 }, IY { 0 };
     
     uint8_t PCS { 0 }; // Step (0-0xFF)
     Nibble  PCP { 1 }, NPCP { 1 }; // Page (0-0xF)
@@ -37,9 +58,21 @@ private:
 
     std::vector<Nibble> memory_;
     std::array<Nibble, 640> ram_ {};
+    std::array<Nibble, 0x80> io_ {};
+    std::array<Nibble, 160> vram_ {};
+    std::array<Interrupt, InterruptTypeSize> interrupts_ {};
+    std::array<bool, 32 * 16> screen_ {};
     uint16_t opcode_;
+    uint32_t cycles_ { 0 };
+    uint8_t last_opcode_cycles_ { 0 };
+    uint16_t programmable_timer_down_counter_ { 0 };
+    uint16_t programmable_timer_down_counter_reload_ { 0 };
+    uint8_t programmable_timer_period_ { 0 };
+    uint8_t programmable_timer_period_counter_ { 0 };
+    bool programmable_timer_enabled_ { false };
 
     void step();
+    void print();
     OpcodeType decode(uint16_t);
 
     #define XMACRO(name, unused, ...) void _##name();
