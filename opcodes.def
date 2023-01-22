@@ -118,36 +118,36 @@ XMACRO(LD_Yr, "1110'1001'xxxx",
 )
 XMACRO(LD_rX, "1110'1010'xxxx",
 	auto id = (opcode_ & 0b1100) >> 2;
-    auto data = read_rq(opcode_ & 0b11).Get();
+    auto addr = opcode_ & 0b11;
     switch (id) {
         case 0b00: {
-            write_ram(IX >> 8, data);
+            write_rq(addr, IX >> 8);
             break;
         }
         case 0b01: {
-            write_ram((IX >> 4) & 0xF, data);
+            write_rq(addr, (IX >> 4) & 0xF);
             break;
         }
         case 0b10: {
-            write_ram(IX & 0xF, data);
+            write_rq(addr, IX & 0xF);
             break;
         }
     }
 )
 XMACRO(LD_rY, "1110'1011'xxxx",
     auto id = (opcode_ & 0b1100) >> 2;
-    auto data = read_rq(opcode_ & 0b11).Get();
+    auto addr = opcode_ & 0b11;
     switch (id) {
         case 0b00: {
-            write_ram(IY >> 8, data);
+            write_rq(addr, IY >> 8);
             break;
         }
         case 0b01: {
-            write_ram((IY >> 4) & 0xF, data);
+            write_rq(addr, (IY >> 4) & 0xF);
             break;
         }
         case 0b10: {
-            write_ram(IY & 0xF, data);
+            write_rq(addr, IY & 0xF);
             break;
         }
     }
