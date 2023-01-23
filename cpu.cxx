@@ -5,6 +5,17 @@
 #include <bitset>
 #include <boost/stacktrace.hpp>
 
+// Mappings from TamaLib
+static uint8_t seg_pos[40] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 32,
+    8, 9, 10, 11, 12, 13, 14, 15,
+    33, 34, 35,
+    31, 30, 29, 28, 27, 26, 25, 24,
+    36,
+    23, 22, 21, 20, 19, 18, 17, 16,
+    37, 38, 39
+};
+
 void CPU::LoadRom(std::string filename) {
     reset();
     std::vector<uint8_t> raw;
@@ -29,10 +40,22 @@ void CPU::LoadRom(std::string filename) {
         i += 3;
         j += 2;
     }
-    for (int i = 0; i < 0x3000; i++) {
-        log();
-        step();
-    }
+}
+
+void CPU::Step() {
+    step();
+}
+
+void CPU::KeyPress(int key) {
+    keys_pressed_[key] = true;
+}
+
+void CPU::KeyRelease(int key) {
+    keys_pressed_[key] = false;
+}
+
+const std::array<uint8_t, 32 * 16>& CPU::GetDisplay() {
+    return screen_;
 }
 
 bool CPU::check_c() {
@@ -134,13 +157,27 @@ void CPU::write_ram(uint16_t addr, Nibble value) {
     }
 }
 
-Nibble CPU::read_vram(uint8_t addr) {
+Nibble CPU::read_vram(uint16_t addr) {
     return 0;
 }
 
-void CPU::write_vram(uint8_t addr, Nibble value) {
-
+uint8_t seg_to_lcd(uint8_t seg) {
+    if (seg > 16) {
+        return 32 - (16 - seg);
+    }
+    return seg;
 }
+
+void CPU::write_vram(uint16_t addr, Nibble value) {
+    uint8_t col = ((addr & 0x7F) >> 1);
+    uint8_t row = (((addr & 0x80) >> 7) * 8 + (addr & 0x1) * 4);
+    if (seg_pos[col] < 32) {
+        for (int i = 0; i < 4; i++) {
+            screen_[seg_pos[col] + (row + i) * 32] = ((value.Get() >> i) & 0b1) * 0xFF;
+        }
+    }
+}
+
 
 void CPU::log() {
     auto opcode = get_opcode();
@@ -168,34 +205,16 @@ void CPU::step() {
     }
     if (PCS == cur_pcs)
         PCS++;
-    if (programmable_timer_enabled_) {
-        if (programmable_timer_period_counter_ >= programmable_timer_period_) {
-            programmable_timer_period_counter_ -= programmable_timer_period_;
-            programmable_timer_down_counter_--;
-            if (programmable_timer_down_counter_ == 0) {
-                if ((interrupts_[Programmable].mask.Get() & 0b1) && check_i()) {
-                    set_i(false);
-                    write_ram(--SP, PCP);
-                    auto new_PCS = PCS + 1;
-                    write_ram(--SP, new_PCS >> 4);
-                    write_ram(--SP, new_PCS & 0xF);
-                    PCB = 0;
-                    PCP = 1;
-                    PCS = 0xC;
-                    // Time equivalent to 12 cycles of CPU system clock is required to execute the interrupt
-                    last_opcode_cycles_ += 12;
-                }
-                programmable_timer_down_counter_ = programmable_timer_down_counter_reload_;
-            }
-            
-        }
-        programmable_timer_period_counter_ += last_opcode_cycles_;
-    }
     cycles_ += last_opcode_cycles_;
+    process_timers();
     
-    if (type != OpcodeType::PSET)
+    if (type != OpcodeType::PSET) {
+        if (check_i()) {
+            process_interrupts();
+        }
         // new page pointer gets reset to current page pointer if not just set
-        NPCP = PCP;
+        NPCP = PCP;        
+    }
 
     IX &= 0xFFF;
     IY &= 0xFFF;
@@ -213,12 +232,20 @@ void CPU::reset() {
     A = 0;
     B = 0;
     F = 0;
-    for (auto& i : interrupts_) {
+    cycles_ = 0;
+    for (int j = 0; j < 6; j++) {
+        auto& i = interrupts_[j];
+        constexpr std::array<int, 6> vectors = { 0x2, 0x4, 0xC, 0xA, 0x6, 0x8 };
         i.factor = 0;
         i.mask = 0;
-        i.triggered = false;
+        i.dispatched = false;
+        i.vector = vectors[j];
     }
     programmable_timer_enabled_ = false;
+    programmable_timer_period_ = 0;
+    programmable_timer_down_counter_ = 0;
+    programmable_timer_down_counter_reload_ = 0;
+    programmable_timer_start_ = 0;
 }
 
 void CPU::print() {

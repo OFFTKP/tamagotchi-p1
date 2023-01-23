@@ -6,6 +6,10 @@
 class Tama {
 public:
     void LoadRom(std::string filename);
+    void Step();
+    const std::array<uint8_t, 32 * 16>& GetDisplay();
+    void KeyPress(int);
+    void KeyRelease(int);
 private:
     CPU cpu_;
 };

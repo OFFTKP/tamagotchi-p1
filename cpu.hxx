@@ -23,12 +23,17 @@ enum InterruptType {
 struct Interrupt {
     Nibble factor;
     Nibble mask;
-    bool triggered;
+    bool dispatched;
+    uint16_t vector;
 };
 
 class CPU {
 public:
     void LoadRom(std::string filename);
+    void Step();
+    const std::array<uint8_t, 32 * 16>& GetDisplay();
+    void KeyPress(int key);
+    void KeyRelease(int key);
 private:
     uint16_t get_opcode();
     uint16_t get_addr();
@@ -37,8 +42,8 @@ private:
     Nibble read(uint16_t addr);
     Nibble read_ram(uint16_t addr);
     void write_ram(uint16_t addr, Nibble data);
-    Nibble read_vram(uint8_t addr);
-    void write_vram(uint8_t addr, Nibble data);
+    Nibble read_vram(uint16_t addr);
+    void write_vram(uint16_t addr, Nibble data);
     Nibble read_io(uint16_t addr);
     void write_io(uint16_t addr, Nibble data);
     void reset_io();
@@ -61,19 +66,23 @@ private:
     std::array<Nibble, 0x80> io_ {};
     std::array<Nibble, 160> vram_ {};
     std::array<Interrupt, InterruptTypeSize> interrupts_ {};
-    std::array<bool, 32 * 16> screen_ {};
+    std::array<uint8_t, 32 * 16> screen_ {};
     uint16_t opcode_;
     uint32_t cycles_ { 0 };
     uint8_t last_opcode_cycles_ { 0 };
+    uint32_t programmable_timer_start_ { 0 };
     uint16_t programmable_timer_down_counter_ { 0 };
     uint16_t programmable_timer_down_counter_reload_ { 0 };
     uint8_t programmable_timer_period_ { 0 };
-    uint8_t programmable_timer_period_counter_ { 0 };
     bool programmable_timer_enabled_ { false };
+    std::array<bool, 3> keys_pressed_ { false, false, false };
 
     void step();
     void print();
     OpcodeType decode(uint16_t);
+    void process_timers();
+    void dispatch_interrupt(InterruptType, int);
+    void process_interrupts();
 
     #define XMACRO(name, unused, ...) void _##name();
     #include "opcodes.def"

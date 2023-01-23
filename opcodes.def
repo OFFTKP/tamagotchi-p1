@@ -66,6 +66,24 @@ XMACRO(INC, "1110'111x'0000",
         IX++;
     }
 )
+XMACRO(RRC, "1110'1000'11xx",
+	auto addr = opcode_ & 0b11;
+    auto r = read_rq(addr);
+    auto new_r = r.Get() >> 1 | (check_c() << 3);
+    set_c(r.Get() & 0b1);
+    set_z(new_r == 0);
+    write_rq(addr, new_r);
+    last_opcode_cycles_ = 7;
+)
+XMACRO(RLC, "1010'1111'xxxx",
+	auto addr = opcode_ & 0b11;
+    auto r = read_rq(addr);
+    auto new_r = r.Get() << 1 | (check_c());
+    set_c(r.Get() & 0b1000);
+    set_z(new_r == 0);
+    write_rq(addr, new_r);
+    last_opcode_cycles_ = 7;
+)
 XMACRO(LD_Xx, "1011'xxxx'xxxx",
 	IX &= 0xF00;
     IX |= opcode_ & 0xFF;
@@ -193,11 +211,21 @@ XMACRO(ADC_Y, "1010'001x'xxxx",
     last_opcode_cycles_ = 7;
 )
 XMACRO(CP_X, "1010'010x'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::CP_X) << std::endl;
+    bool low = opcode_ & 0b1'0000;
+	int i = opcode_ & 0b1111;
+    int x = low ? IX & 0xF : ((IX & 0xF0) >> 4);
+    int result = x - i;
+    set_z((result & 0xF) == 0);
+    set_c(result < 0);
     last_opcode_cycles_ = 7;
 )
 XMACRO(CP_Y, "1010'011x'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::CP_Y) << std::endl;
+	bool low = opcode_ & 0b1'0000;
+	int i = opcode_ & 0b1111;
+    int y = low ? IY & 0xF : ((IY & 0xF0) >> 4);
+    int result = y - i;
+    set_z((result & 0xF) == 0);
+    set_c(result < 0);
     last_opcode_cycles_ = 7;
 )
 XMACRO(LD_ri, "1110'00xx'xxxx",
@@ -520,26 +548,33 @@ XMACRO(CP_rq, "1111'0000'xxxx",
     last_opcode_cycles_ = 7;
 )
 XMACRO(FAN_i, "1101'10xx'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::FAN_i) << std::endl;
+    auto r = read_rq((opcode_ >> 4) & 0b11);
+    Nibble i = opcode_ & 0b1111;
+    set_z((r & i) == 0);
     last_opcode_cycles_ = 7;
 )
 XMACRO(FAN_q, "1111'0001'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::FAN_q) << std::endl;
+    auto r = read_rq((opcode_ >> 2) & 0b11);
+    auto q = read_rq(opcode_ & 0b11);
+    set_z((r & q) == 0);
     last_opcode_cycles_ = 7;
-)
-XMACRO(RLC, "1010'1111'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RLC) << std::endl;
-    last_opcode_cycles_ = 7;
-)
-XMACRO(RRC, "1110'1000'11xx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::RRC) << std::endl;
 )
 XMACRO(INC_Mn, "1111'0110'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::INC_Mn) << std::endl;
+    auto addr = opcode_ & 0b1111;
+	auto mn = read_ram(addr);
+    int result = mn.Get() + 1;
+    set_z((result & 0xF) == 0);
+    set_c(result > 0xF);
+    write_ram(addr, result);
     last_opcode_cycles_ = 7;
 )
 XMACRO(DEC_Mn, "1111'0111'xxxx",
-	std::cout << "Unimplemented instruction: " << serialize(OpcodeType::DEC_Mn) << std::endl;
+    auto addr = opcode_ & 0b1111;
+    auto mn = read_ram(addr);
+    int result = mn.Get() - 1;
+    set_z((result & 0xF) == 0);
+    set_c(result < 0);
+    write_ram(addr, result);
     last_opcode_cycles_ = 7;
 )
 XMACRO(ACP, "1111'0010'10xx",
